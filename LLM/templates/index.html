@@ -1,1 +1,478 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Lab 智能中枢</title>
+    <style>
+        :root {
+            --primary: #2563eb; --primary-hover: #1d4ed8; --bg: #f3f4f6; --chat-bg: #ffffff;
+            --user-msg: #eff6ff; --ai-msg: #f9fafb; --text-main: #1f2937; --text-light: #6b7280;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif; }
+        body { background-color: var(--bg); display: flex; justify-content: center; height: 100vh; padding: 20px; }
 
+        .chat-container { width: 100%; max-width: 900px; background: var(--chat-bg); border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); display: flex; flex-direction: column; overflow: hidden; position: relative; }
+        .header { padding: 20px; background: #fff; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; }
+        .header h1 { font-size: 1.25rem; color: var(--text-main); display: flex; align-items: center; }
+        .status-dot { display: inline-block; width: 10px; height: 10px; background-color: #10b981; border-radius: 50%; margin-right: 8px; }
+
+        .chat-box { flex: 1; padding: 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px; scroll-behavior: smooth; }
+        .message-row { display: flex; width: 100%; }
+        .message-row.user { justify-content: flex-end; }
+        .message { max-width: 80%; padding: 14px 18px; border-radius: 12px; line-height: 1.6; font-size: 0.95rem; color: var(--text-main); white-space: pre-wrap; word-wrap: break-word; }
+        .message.user { background: var(--user-msg); border: 1px solid #bfdbfe; border-bottom-right-radius: 4px; }
+        .message.ai { background: var(--ai-msg); border: 1px solid #e5e7eb; border-bottom-left-radius: 4px; }
+
+        .task-card { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; margin-top: 10px; font-size: 0.9rem; width: 100%; }
+        .task-card .task-log { font-family: monospace; color: #166534; margin-bottom: 8px; }
+        .finding-item { background: #fff; padding: 10px; border-radius: 6px; border-left: 4px solid #10b981; margin-top: 8px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .finding-tag { font-weight: bold; color: #047857; margin-bottom: 4px; display: inline-block;}
+
+        /* Agent UI 按钮群 */
+        .agent-actions { margin-top: 12px; display: flex; gap: 10px; }
+        .btn-yes { background: #10b981; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: bold;}
+        .btn-yes:hover { background: #059669; }
+        .btn-no { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; padding: 8px 16px; border-radius: 6px; cursor: pointer; }
+        .btn-no:hover { background: #e5e7eb; }
+
+        .input-area { padding: 15px 20px; background: #fff; border-top: 1px solid #e5e7eb; display: flex; align-items: center; gap: 12px; position: relative; }
+        .tool-btn { background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 50%; width: 40px; height: 40px; font-size: 1.5rem; color: #4b5563; cursor: pointer; display: flex; justify-content: center; align-items: center; transition: all 0.2s; flex-shrink: 0; }
+        .tool-btn:hover { background: #e5e7eb; color: var(--primary); }
+        .mode-menu { position: absolute; bottom: 70px; left: 20px; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); width: 180px; display: none; flex-direction: column; overflow: hidden; z-index: 10; transform-origin: bottom left; animation: popup 0.2s ease-out; }
+        @keyframes popup { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+        .mode-item { padding: 12px 16px; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: background 0.2s; border-bottom: 1px solid #f3f4f6; }
+        .mode-item:hover { background: #eff6ff; color: var(--primary); }
+
+        .input-container { flex: 1; display: flex; align-items: center; background: #fff; border: 1px solid #d1d5db; border-radius: 24px; padding: 4px 14px; transition: border 0.2s; overflow: hidden; }
+        .input-container.disabled { background: #f3f4f6; cursor: not-allowed; }
+        .mode-badge { background: var(--primary); color: white; padding: 4px 10px; border-radius: 16px; font-size: 0.8rem; font-weight: bold; white-space: nowrap; margin-right: 8px; display: none; align-items: center; gap: 4px; }
+        .input-container input { flex: 1; border: none; outline: none; padding: 10px 0; font-size: 1rem; width: 100%; background: transparent; }
+
+        .send-btn { background: var(--primary); color: white; border: none; padding: 0 24px; height: 40px; border-radius: 24px; font-weight: 600; cursor: pointer; transition: background 0.2s; flex-shrink: 0; display: flex; align-items: center; justify-content: center; gap: 6px; }
+        .send-btn.cancel-mode { background: #ef4444; } /* 停止提取时的红色按钮 */
+        .send-btn.cancel-mode:hover { background: #dc2626; }
+        .send-btn:disabled { background: #9ca3af; cursor: not-allowed; }
+
+        /* 左右分屏布局 */
+        body { margin: 0; padding: 0; height: 100vh; overflow: hidden; background-color: var(--bg); display: flex; justify-content: center; align-items: center; }
+        .app-wrapper { display: flex; justify-content: center; margin: 0 auto; width: 100%; max-width: 1400px; height: 100vh; padding: 20px; gap: 20px; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
+
+        /* PDF 预览面板 */
+        .pdf-panel { flex: 0; width: 0; background: #fff; border-radius: 16px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); overflow: hidden; display: flex; flex-direction: column; opacity: 0; transform: translateX(20px); transition: all 0.4s ease; position: relative; }
+        .app-wrapper.split-mode .pdf-panel { flex: 1; width: 50%; opacity: 1; transform: translateX(0); }
+        .app-wrapper.split-mode .chat-container { flex: 1; max-width: none; }
+        .pdf-header { padding: 15px 20px; background: #1f2937; color: #fff; font-weight: bold; font-size: 0.95rem; display: flex; justify-content: space-between; align-items: center; z-index: 2; }
+        .pdf-viewer { flex: 1; position: relative; background: #f3f4f6; display: flex; justify-content: center; align-items: center; overflow: hidden; padding: 20px; }
+        .pdf-viewer img { max-width: 100%; max-height: 100%; object-fit: contain; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border-radius: 4px; transition: opacity 0.3s; }
+
+        /* AI 扫描线动画 */
+        .scan-line { position: absolute; top: 0; left: 0; width: 100%; height: 6px; background: rgba(16, 185, 129, 0.7); box-shadow: 0 0 20px rgba(16, 185, 129, 1); display: none; z-index: 10; animation: scan 2.5s ease-in-out infinite alternate; border-radius: 50%; }
+        @keyframes scan { 0% { top: 5%; } 100% { top: 95%; } }
+        .is-scanning .scan-line { display: block; }
+
+        /* 拖拽上传覆盖层 */
+        .chat-container { position: relative; }
+        .chat-container.drag-over::after { content: '📁 松开鼠标上传 PDF 至本地库'; position: absolute; top:0; left:0; right:0; bottom:0; background: rgba(255,255,255,0.95); z-index: 100; display: flex; justify-content: center; align-items: center; font-size: 1.5rem; color: var(--primary); font-weight: bold; border: 4px dashed var(--primary); border-radius: 16px; backdrop-filter: blur(5px); }
+
+        /* 转圈动画 */
+        .btn-spinner { width: 16px; height: 16px; border: 2px solid #ffffff; border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(4px); }
+        .modal { background: #fff; width: 90%; max-width: 600px; border-radius: 16px; padding: 30px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); text-align: center; }
+        .modal h2 { margin-bottom: 15px; color: #10b981; }
+        .close-btn { background: var(--primary); color: white; border: none; padding: 10px 30px; border-radius: 8px; cursor: pointer; margin-top: 20px;}
+    </style>
+</head>
+<body>
+<div class="app-wrapper" id="app-wrapper">
+
+<div class="chat-container">
+    <div class="header">
+        <h1><span class="status-dot"></span>AI Lab 智能中枢</h1>
+        <small style="color: var(--text-light)">Agent 提取控制台</small>
+    </div>
+
+    <div class="chat-box" id="chat-box">
+        <div class="message-row ai">
+            <div class="message ai">系统初始化完成。请点击左下角 <b>+</b> 号选择模式，或直接与我对话。</div>
+        </div>
+    </div>
+
+    <div class="mode-menu" id="mode-menu">
+        <div class="mode-item" onclick="setMode('normal', '', '')">💬 普通问答模式</div>
+        <div class="mode-item" onclick="setMode('extract', '帮我搜寻：', '📄 文献提取')">📄 文献提取模式</div>
+        <div class="mode-item" onclick="setMode('hardware', '硬件控制：', '⚙️ 硬件操控')">⚙️ 硬件操控模式</div>
+    </div>
+
+    <div class="input-area">
+        <button id="tool-btn" class="tool-btn">+</button>
+
+        <label for="file-upload" class="tool-btn" style="margin-left:-8px; cursor:pointer;" title="上传文献">📎</label>
+        <input type="file" id="file-upload" accept=".pdf" style="display:none;" multiple>
+
+        <div class="input-container" id="input-container">
+            <div id="mode-badge" class="mode-badge"></div>
+            <input type="text" id="user-input" placeholder="输入问题或指令..." autocomplete="off">
+        </div>
+        <button id="send-btn" class="send-btn">发送</button>
+    </div>
+</div>
+
+<div class="pdf-panel" id="pdf-panel">
+    <div class="pdf-header">
+        <span>AI正在阅读...</span>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <span id="pdf-title" style="font-size:0.8rem; color:#9ca3af; font-weight:normal;">等待连接...</span>
+            <button id="close-pdf-btn" style="background: none; border: none; color: #fff; font-size: 1.5rem; cursor: pointer; padding: 0; line-height: 1;" title="关闭预览面板">×</button>
+        </div>
+    </div>
+    <div class="pdf-viewer" id="pdf-viewer">
+        <div class="scan-line"></div>
+        <img id="pdf-image" src="" alt="等待 AI 读取画面..." style="opacity: 0;">
+    </div>
+</div>
+
+<div class="modal-overlay" id="summary-modal">
+    <div class="modal">
+        <h2>🎉 解析任务已结束</h2>
+        <p id="summary-text" style="color: var(--text-light); line-height: 1.6;"></p>
+        <button class="close-btn" onclick="document.getElementById('summary-modal').style.display='none'">确定</button>
+    </div>
+</div>
+
+<script>
+    const chatBox = document.getElementById('chat-box');
+    const userInput = document.getElementById('user-input');
+    const sendBtn = document.getElementById('send-btn');
+    const toolBtn = document.getElementById('tool-btn');
+    const modeMenu = document.getElementById('mode-menu');
+    const modeBadge = document.getElementById('mode-badge');
+    const inputContainer = document.getElementById('input-container');
+
+    let currentMode = { id: 'normal', prefix: '', label: '' };
+
+    toolBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        modeMenu.style.display = modeMenu.style.display === 'flex' ? 'none' : 'flex';
+    });
+    document.addEventListener('click', () => modeMenu.style.display = 'none');
+
+    function setMode(id, prefix, label) {
+        currentMode = { id, prefix, label };
+        modeMenu.style.display = 'none';
+        if (id === 'normal') {
+            modeBadge.style.display = 'none';
+            userInput.placeholder = '输入问题或指令...';
+        } else {
+            modeBadge.innerHTML = `${label} <span style="cursor:pointer; margin-left:4px" onclick="event.stopPropagation(); setMode('normal','','')">×</span>`;
+            modeBadge.style.display = 'flex';
+            userInput.placeholder = '输入要求(可留空默认)...';
+        }
+        userInput.focus();
+    }
+
+    sendBtn.addEventListener('click', sendMessage);
+    userInput.addEventListener('keypress', e => { if (e.key === 'Enter') sendMessage(); });
+
+    async function sendMessage() {
+        const text = userInput.value.trim();
+        if (!text && currentMode.id === 'normal') return;
+
+        const finalPayload = currentMode.prefix + text;
+        const displayHtml = currentMode.id !== 'normal'
+            ? `<span style="background:rgba(255,255,255,0.2); padding:2px 6px; border-radius:6px; font-size:0.85em; margin-right:5px;">${currentMode.label}</span> ${text || '专门用于 FAPbI3 钙钛矿体系的钝化剂(Passivator)'}`
+            : text;
+
+        appendMessageHtml(displayHtml, 'user');
+        userInput.value = '';
+        setNormalLoadingState(true);
+
+        try {
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'chat', message: finalPayload })
+            });
+
+            setNormalLoadingState(false);
+            const contentType = response.headers.get("content-type");
+
+            if (contentType && contentType.indexOf("application/json") !== -1) {
+                const data = await response.json();
+
+                // 🌟 Agent 询问确认字段环节
+                if (data.type === 'field_confirm') {
+                    renderFieldConfirm(data.task_desc, data.fields, data.reply);
+                }
+                else if (data.type === 'task_trigger') {
+                    appendMessage(data.reply, 'ai');
+                    startTaskStream();
+                } else {
+                    appendMessage(data.reply, 'ai');
+                }
+            } else {
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                const msgDiv = createMessageDiv('ai');
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    msgDiv.textContent += decoder.decode(value, {stream: true});
+                    scrollToBottom();
+                }
+            }
+        } catch (error) {
+            setNormalLoadingState(false);
+            appendMessage('网络连接异常。', 'ai');
+        }
+    }
+
+    // =====================================
+    // 🌟 Schema 确认逻辑
+    // =====================================
+    function renderFieldConfirm(taskDesc, fields, replyMsg) {
+        // 必须顶格写，否则模板字符串里的空格会被 pre-wrap 渲染出来
+        const html = `<div>
+${replyMsg.replace(/\n/g, '<br>')}
+<div class="agent-actions">
+    <button class="btn-yes" onclick='confirmExtraction(${JSON.stringify(taskDesc)}, ${JSON.stringify(fields)}, this)'>✅ 确认使用上述字段提取</button>
+    <button class="btn-no" onclick='modifyExtraction(this)'>❌ 补充修改要求</button>
+</div>
+</div>`;
+        appendMessageHtml(html, 'ai');
+    }
+
+    async function confirmExtraction(taskDesc, fields, btnElement) {
+        btnElement.parentElement.innerHTML = '<i>(用户已确认)</i>'; // 销毁按钮防止重复点击
+        appendMessageHtml("✅ 是的，请按此计划开始执行。", "user");
+
+        setNormalLoadingState(true);
+        const res = await fetch('/api/chat', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ action: 'start_extraction', task_desc: taskDesc, fields: fields })
+        });
+        setNormalLoadingState(false);
+
+        const data = await res.json();
+        if (data.type === 'task_trigger') {
+            appendMessage(data.reply, 'ai');
+            startTaskStream();
+        }
+    }
+
+    function modifyExtraction(btnElement) {
+        btnElement.parentElement.innerHTML = '<i>(用户要求修改)</i>';
+        appendMessageHtml("❌ 否，我需要修改要求。", "user");
+        setMode('extract', '帮我搜寻：', '📄 文献提取');
+        userInput.placeholder = "请直接输入你的补充要求，例如：增加某某字段...";
+        userInput.focus();
+    }
+
+    // =====================================
+    // 🌟 后台提取与中断控制
+    // =====================================
+    function startTaskStream() {
+        setTaskRunningState(true); // 切换UI到暂停模式
+
+        const eventSource = new EventSource('/api/task_stream');
+        const row = document.createElement('div');
+        row.className = 'message-row ai';
+        const card = document.createElement('div');
+        card.className = 'task-card';
+        card.innerHTML = `<div class="task-log" id="current-log">准备连接解析引擎...</div><div id="findings-container"></div>`;
+        row.appendChild(card);
+        chatBox.appendChild(row);
+
+        const logEl = card.querySelector('#current-log');
+        const findingsEl = card.querySelector('#findings-container');
+        scrollToBottom();
+
+        eventSource.onmessage = function(event) {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'info' || msg.type === 'progress') {
+                logEl.textContent = `> ${msg.message}`;
+            }
+            else if (msg.type === 'page_reading') {
+                document.getElementById('app-wrapper').classList.add('split-mode');
+                document.getElementById('pdf-viewer').classList.add('is-scanning');
+                document.getElementById('pdf-title').textContent = `${msg.data.filename} (第 ${msg.data.page} 页)`;
+
+                const imgEl = document.getElementById('pdf-image');
+                imgEl.src = "data:image/jpeg;base64," + msg.data.image;
+                imgEl.style.opacity = "1";
+            }
+            else if (msg.type === 'finding') {
+                const d = msg.data;
+                const findingDiv = document.createElement('div');
+                findingDiv.className = 'finding-item';
+
+                // 动态拼装 JSON Keys
+                let detailsHtml = '';
+                for(let key in d.details) {
+                    if(key !== '_source_doc') {
+                        detailsHtml += `<span style="color:#374151"><b>${key}:</b> ${d.details[key]}</span><br>`;
+                    }
+                }
+                findingDiv.innerHTML = `<span class="finding-tag">🎯 新发现 (第${d.page}页)</span><br><div style="font-size:0.85rem; padding-left:10px; border-left:2px solid #e5e7eb; margin-top:5px;">${detailsHtml}</div>`;
+
+                findingsEl.appendChild(findingDiv); // 修复: 从下面插入
+            } else if (msg.type === 'complete') {
+                logEl.textContent = `✅ 提取结束！`;
+                logEl.style.color = '#047857';
+
+                // 完成时关闭扫描动画，但保留画面供复盘
+                document.getElementById('pdf-viewer').classList.remove('is-scanning');
+                document.getElementById('pdf-title').textContent = "任务已完成";
+
+                eventSource.close();
+                setTaskRunningState(false); // 恢复正常UI
+                showSummaryModal(msg.csv, msg.count);
+            }
+            scrollToBottom();
+        };
+
+        eventSource.onerror = function() {
+            logEl.textContent = `⚠️ 连接断开。`;
+            eventSource.close();
+            setTaskRunningState(false);
+        };
+    }
+
+    // 取消任务请求
+    async function requestCancelTask() {
+        sendBtn.innerHTML = '<div class="btn-spinner"></div> 正在中断...';
+        sendBtn.disabled = true;
+        await fetch('/api/cancel_task', {method: 'POST'});
+        // 等待后台自动处理完后发送 complete，从而关闭 SSE
+    }
+
+    // =====================================
+    // UI 状态控制辅助
+    // =====================================
+    function setNormalLoadingState(isLoading) {
+        userInput.disabled = isLoading;
+        sendBtn.disabled = isLoading;
+        inputContainer.classList.toggle('disabled', isLoading);
+        sendBtn.innerHTML = isLoading ? '<div class="btn-spinner"></div>' : '发送';
+        if (!isLoading) userInput.focus();
+    }
+
+    function setTaskRunningState(isRunning) {
+        if(isRunning) {
+            userInput.disabled = true;
+            inputContainer.classList.add('disabled');
+            sendBtn.innerHTML = '<div class="btn-spinner"></div> 暂停提取';
+            sendBtn.className = 'send-btn cancel-mode';
+            sendBtn.onclick = null; // 移除之前的发送逻辑
+            sendBtn.addEventListener('click', requestCancelTask); // 绑定中断逻辑
+        } else {
+            userInput.disabled = false;
+            inputContainer.classList.remove('disabled');
+            sendBtn.innerHTML = '发送';
+            sendBtn.className = 'send-btn';
+            sendBtn.removeEventListener('click', requestCancelTask);
+            sendBtn.onclick = null;
+            sendBtn.addEventListener('click', sendMessage);
+            userInput.focus();
+        }
+    }
+
+    function showSummaryModal(csvPath, count) {
+        const textEl = document.getElementById('summary-text');
+        textEl.innerHTML = `共提取了 <b>${count}</b> 条高价值数据。<br><br>完整的数据表已保存在你的项目目录下：<br><code style="background:#f3f4f6; padding:4px; border-radius:4px; font-size:0.9em; word-break:break-all;">${csvPath}</code>`;
+        document.getElementById('summary-modal').style.display = 'flex';
+    }
+
+    function createMessageDiv(sender) {
+        const row = document.createElement('div');
+        row.className = `message-row ${sender}`;
+        const msg = document.createElement('div');
+        msg.className = `message ${sender}`;
+        row.appendChild(msg);
+        chatBox.appendChild(row);
+        return msg;
+    }
+
+    function appendMessageHtml(html, sender) {
+        const msgDiv = createMessageDiv(sender);
+        msgDiv.innerHTML = html;
+        scrollToBottom();
+    }
+
+    function appendMessage(text, sender) {
+        const msgDiv = createMessageDiv(sender);
+        msgDiv.textContent = text;
+        scrollToBottom();
+    }
+
+    function scrollToBottom() {
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    // =====================================
+    // 关闭 PDF 面板
+    // =====================================
+    document.getElementById('close-pdf-btn').addEventListener('click', () => {
+        document.getElementById('app-wrapper').classList.remove('split-mode');
+    });
+
+    // =====================================
+    // 拖拽与上传逻辑
+    // =====================================
+    const fileUpload = document.getElementById('file-upload');
+    const chatContainer = document.getElementById('chat-container');
+
+    // 监听回形针点击选择
+    fileUpload.addEventListener('change', (e) => handleFiles(e.target.files));
+
+    // 监听拖拽事件
+    chatContainer.addEventListener('dragover', (e) => { e.preventDefault(); chatContainer.classList.add('drag-over'); });
+    chatContainer.addEventListener('dragleave', (e) => { e.preventDefault(); chatContainer.classList.remove('drag-over'); });
+    chatContainer.addEventListener('drop', (e) => {
+        e.preventDefault();
+        chatContainer.classList.remove('drag-over');
+        handleFiles(e.dataTransfer.files);
+    });
+
+    async function handleFiles(files) {
+        if (!files || files.length === 0) return;
+
+        const formData = new FormData();
+        let pdfCount = 0;
+
+        for (let file of files) {
+            if (file.type === "application/pdf" || file.name.toLowerCase().endsWith('.pdf')) {
+                formData.append('files', file);
+                pdfCount++;
+            }
+        }
+
+        if (pdfCount === 0) {
+            appendMessage('仅支持上传 PDF 格式的文献哦！', 'ai');
+            return;
+        }
+
+        appendMessage(`正在将 ${pdfCount} 份文献归档至本地知识库...`, 'user');
+
+        try {
+            const res = await fetch('/api/upload', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.status === 'success') {
+                appendMessage(`✅ 成功归档！可随时对它们下达提取指令。\n\n已保存：\n${data.saved.join('\n')}`, 'ai');
+            } else {
+                appendMessage(`❌ 上传失败：${data.error}`, 'ai');
+            }
+        } catch (e) {
+            appendMessage('❌ 网络异常，未能连接到本地服务。', 'ai');
+        }
+
+        fileUpload.value = ''; // 清空选择器，允许重复上传同一文件
+    }
+
+</script>
+</div>
+</body>
+</html>
