@@ -22,12 +22,10 @@ The structure of this repository is as follows:
 
 | File Path | Role | Key Capabilities |
 |-----------|------|-----------------|
-| `BO` |           |                                |
+| `guass_and_bayesian-optimization` |Bayesian optimization module  |Iterative experiment design, parameter space exploration, optimal condition suggestion based on historical data |
 | `templates/index.html` | Frontend interface | Multi-mode interaction, PDF preview, progress visualization, task control |
 | `app.py` | Main Flask server | PDF parsing, LLM integration, data extraction/storage, task scheduling, hardware integration |
-| `hardware_controller.py` | Hardware control core | Reagent position parsing, experiment instruction integration, LLM routing, low-level hardware control |
 | `agent_client.py` | EMQX client module | MQTT communication, experiment command dispatch |
-| `temporal/extraction.csv` | Temporary data file | Stores latest extracted parameters for hardware module |
 | `extract/` | Archive directory | Timestamped storage of historical results |
 | `reagent_layout.json` | Reagent config | Stores physical positions of reagents (BPxx format) |
 
