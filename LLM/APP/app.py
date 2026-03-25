@@ -39,9 +39,10 @@ app = Flask(__name__)
 # ==========================================
 # ⚙️ Core configuration parameters
 # ==========================================
-SILICONFLOW_API_KEY = "sk-zskagakurneevlklkhhzbaxunehikfyeinnjvyizyfstvtci"  # ⚠️ Please replace with your real API key
-PDF_FOLDER = r"test"
-MODEL_NAME = "Qwen/Qwen2.5-VL-72B-Instruct"
+SILICONFLOW_API_KEY = "sk-"  # ⚠️ Please replace with your real API key
+PDF_FOLDER = r"PDF_Extract"
+MODEL_NAME = "Qwen/Qwen2.5-VL-72B-Instruct" # ⚠️ Please choose your model, here takes Qwen for example
+                                            # PS: Please ensure that the large language model you choose supports image (visual) mode, this is a multimodal task
 
 # Model path definition
 Base_URL = "https://api.siliconflow.cn/v1"
