@@ -6,11 +6,15 @@ class Client_Conf:
     Class saving the configurations of the agent client, including client id, username, password, server ip and port
     """
     def __init__(self):
+        # ⚠️ Please replace with your real client_id, usr_name, password and so on
         self.client_id = "bibilabu"
         self.usr_name = "agent"
-        self.password = "s208ht"
-        self.ip = "192.168.120.129"
+        self.password = ""
+        self.ip = "114.514.191.810"
         self.port = 1883
+
+        if not self.password:
+            raise ValueError("Password cannot be empty!")
 
 class MQTTConnector:
     """emqx server connection class"""
@@ -71,4 +75,6 @@ class MQTTConnector:
 
     def publish(self, topic:str, msg:str):
         """Publish string data"""
+        if not self.check_connect():
+            raise ConnectionError("MQTT client is not connected to the server!")
         self.client.publish(topic, msg)

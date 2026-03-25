@@ -8,7 +8,7 @@ from pydantic_ai import RunContext
 import logging
 import threading
 import json
-from agent_client import MQTTConnector # 确保你同目录下有之前上传的 agent_client.py
+from agent_client import MQTTConnector
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -170,9 +170,7 @@ async def do_experiment(
         err = f"Error occurred: {str(e)}"
         return err
 
-# 原hardware.py
 def execute_spin_coating(spin_speed: int, spin_acc: int, spin_dur: int, reagent: str, volume: int) -> str:
-    """底层：向自动化平台发送旋涂实验 MQTT 指令"""
     payload = {
         "action": "do_experiment",
         "params": {
@@ -187,24 +185,22 @@ def execute_spin_coating(spin_speed: int, spin_acc: int, spin_dur: int, reagent:
         if not local_client.check_connect():
             local_client.connect(timeout=2)
         local_client.publish("do_experiment", json.dumps(payload))
-        return f"实验指令下发成功。试剂:{reagent}, 转速:{spin_speed}rpm, 时长:{spin_dur}ms"
+        return f"Successfully done!"
     except Exception as e:
-        return f"指令下发失败: {str(e)}"
+        return f"ERROR: {str(e)}"
 
 def execute_set_temperature(target: float) -> str:
-    """底层：调用 C/C++ 程序设置加热台温度"""
     try:
         # cmd_list = ["./temp_ctrl", "--set", str(target)]
         # res = subprocess.run(cmd_list, capture_output=True, text=True)
         # return res.stdout.strip()
-        return f"硬件加热台温度已成功设置为 {target} ℃"
+        return f"Successfully done!"
     except Exception as e:
-        return f"温度设置失败: {str(e)}"
+        return f"ERROR: {str(e)}"
 
 def execute_move_robot_arm(x: float, y: float, z: float) -> str:
-    """底层：调用机械臂 Python 控制脚本"""
     try:
         # res = subprocess.run(["python", "arm_ctrl.py", str(x), str(y), str(z)], capture_output=True, text=True)
-        return f"机械臂已精准移动至坐标 ({x}, {y}, {z})"
+        return f"Successfully done!"
     except Exception as e:
-        return f"机械臂移动失败: {str(e)}"
+        return f"ERROR: {str(e)}"
